@@ -5,8 +5,10 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GOOGLE_API_KEY!,
 });
 
-const testAI = async (pdfPath: string) => {
-  const pdfBuffer = fs.readFileSync(`public/uploads/${pdfPath}`);
+const aiPdfAnalyzer = async (pdfPath: string) => {
+  const fullPath = `public/uploads/${pdfPath}`;
+
+  const pdfBuffer = fs.readFileSync(fullPath);
   const base64PDF = pdfBuffer.toString('base64');
 
   const response = await ai.models.generateContent({
@@ -21,14 +23,22 @@ const testAI = async (pdfPath: string) => {
             },
           },
           {
-            text: `Extrae todas las tablas de este PDF.
-                   Para cada tabla:
-                   1. Extrae solo las tablas de los pedidos y sus columnas
-                   2. une todas las tablas en una sola
-                   3. Conviértela a formato JSON
-                   4. que responda con un objeto no un array de objetos JSON
-                   {"headers" : ["col1", "col2", ...], "data" : [{"col1": "dato1", "col2": "dato2", ...}]}
-                   Responde SOLO con un array JSON válido, sin texto adicional.`,
+            text: `
+            Extrae todas las tablas de este PDF. Para cada tabla:
+
+            1. Filtra solo las tablas que contengan información de pedidos y sus columnas.
+            2. Une todas estas tablas en una sola tabla consolidada.
+            3. Convierte la tabla unificada a formato JSON.
+            4. El JSON debe ser un objeto con la siguiente estructura, NO un array de objetos:
+            {
+              "headers": ["Código de Barras", "Descripción Pedido", "Unidades", "Precio", "Total"],
+              "data": [
+                {"col1": "dato1", "col2": "dato2", "col3": "dato3", "col4": "dato4", "col5": "dato5"},
+                ...
+              ]
+            }
+
+            Responde SOLO con un JSON válido siguiendo esta estructura, sin texto adicional, explicaciones ni comentarios.`,
           },
         ],
       },
@@ -37,19 +47,18 @@ const testAI = async (pdfPath: string) => {
 
   const raw = response.text ?? '';
 
-  // Limpiar markdown si viene con ```json ... ```
+  // Limpieza robusta: elimina cualquier variación de fence de markdown
   const cleaned = raw
-    .replace(/^```json\n?/, '')
-    .replace(/\n?```$/, '')
+    .replace(/^```[\w]*\s*/m, '')
+    .replace(/\s*```\s*$/m, '')
     .trim();
 
-  try {
-    fs.unlinkSync(`public/uploads/${pdfPath}`);
-    return JSON.parse(cleaned);
-  } catch {
-    console.warn('No se pudo parsear como JSON, retornando texto crudo');
-    return raw;
-  }
+  // Parsear ANTES de borrar el archivo
+  const parsed = JSON.parse(cleaned); // lanza si el JSON es inválido
+
+  fs.unlinkSync(fullPath);
+
+  return parsed;
 };
 
-export { testAI };
+export { aiPdfAnalyzer };
