@@ -39,6 +39,7 @@ const excelMasterAnalyzer = async (aiResponse: any) => {
 
   let colCOD: any = null;
   let colDESC: any = null;
+  let colCOD_ARTICULO: any = null; // ✅ Nueva columna
 
   let results: any = [];
 
@@ -50,9 +51,11 @@ const excelMasterAnalyzer = async (aiResponse: any) => {
 
     if (value === 'COD_BARRA') colCOD = colNumber;
     if (value === 'DESCRIPCION_1') colDESC = colNumber;
+    if (value === 'COD_ARTICULO') colCOD_ARTICULO = colNumber; // ✅ Detectar nueva columna
   });
 
-  if (!colCOD || !colDESC) {
+  if (!colCOD || !colDESC || !colCOD_ARTICULO) {
+    // ✅ Validar nueva columna
     throw new Error('No se encontraron las columnas');
   }
 
@@ -62,11 +65,11 @@ const excelMasterAnalyzer = async (aiResponse: any) => {
 
     const COD_BARRA = row.getCell(colCOD).value;
     const DESCRIPCION_1 = row.getCell(colDESC).value;
-
-    // 👉 aquí decides si quieres incluir vacíos o no
+    const COD_ARTICULO = row.getCell(colCOD_ARTICULO).value; // ✅ Leer nueva columna
 
     results.push({
       'Código de Barras': COD_BARRA ?? null,
+      'Código del articulo Master': COD_ARTICULO ?? null, // ✅ Añadir al resultado
       'Descripción Master': DESCRIPCION_1 ?? null,
     });
   });
@@ -79,23 +82,27 @@ const excelMasterAnalyzer = async (aiResponse: any) => {
 const cleanResult = (master: any, pedidos: any) => {
   const masterMap: any = {};
   master.forEach((item: any) => {
-    masterMap[item['Código de Barras']] = item['Descripción Master'];
+    masterMap[item['Código de Barras']] = {
+      descripcion: item['Descripción Master'],
+      codigo: item['Código del articulo Master'], // ✅ Guardar en el map
+    };
   });
 
-  // Mapear los datos y agregar Descripción Master antes de Descripción Pedido
+  // Mapear los datos incluyendo la nueva columna en su posición correcta
   const dataConMaster = pedidos.data.map((item: any) => ({
     'Código de Barras': item.col1,
-    'Descripción Master': masterMap[item.col1] || '',
+    'Código del articulo Master': masterMap[item.col1]?.codigo || '', // ✅ Entre Barras y Descripción
+    'Descripción Master': masterMap[item.col1]?.descripcion || '',
     'Descripción Pedido': item.col2,
     Unidades: item.col3,
     Precio: item.col4,
     Total: item.col5,
   }));
 
-  // Si quieres mantener la estructura original con headers
   const pedidosActualizado = {
     headers: [
       'Código de Barras',
+      'Código del articulo Master', // ✅ En su posición correcta
       'Descripción Master',
       'Descripción Pedido',
       'Unidades',
